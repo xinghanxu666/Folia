@@ -2,65 +2,29 @@ name: Patch and Build
 
 on:
   push:
-    branches:
-      - '**'
-    tags:
-      - '*'
+    branches: [ "**" ]
   pull_request:
-    branches:
-      - '**'
-
-permissions:
-  contents: write
 
 jobs:
   build:
+    # Only run on PRs if the source branch is on someone else's repo
+    if: ${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Git Repository
         uses: actions/checkout@v3
-      
-      - name: Validate Gradle Wrapper
+      - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@v1
-      
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-      
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
-      
       - name: Configure Git User Details
         run: git config --global user.email "actions@github.com" && git config --global user.name "Github Actions"
-      
       - name: Apply Patches
         run: ./gradlew applyPatches
-      
       - name: Build
         run: ./gradlew build
-      
-      - name: Upload Artifact
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          # 假设构建产物是一个jar文件，位于build/libs目录下
-          ARTIFACT_PATH=$(find build/libs -type f -name "*.jar" | head -n 1)
-          # 检查构建产物是否存在
-          if [ -n "$ARTIFACT_PATH" ]; then
-            echo "Artifact found at: $ARTIFACT_PATH"
-          else
-            echo "Error: Artifact not found."
-            exit 1
-          fi
-          echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
-
-      - name: Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ${{ env.ARTIFACT_PATH }}
-          draft: true
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
